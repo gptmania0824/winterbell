@@ -8,18 +8,37 @@
   const bestEl = document.getElementById("best");
   const finalScoreEl = document.getElementById("finalScore");
 
-  let W=0,H=0,dpr=1,state="menu",score=0,best=Number(localStorage.getItem("winterbell-best")||0);
+  let W=0,H=0,dpr=1,state="menu",score=0,best=0;
+  function loadBest(){
+    try{
+      const v=Number.parseInt(localStorage.getItem("winterbell-best")||"0",10);
+      return Number.isFinite(v)&&v>=0?v:0;
+    }catch{return 0;}
+  }
+  function saveBest(v){
+    try{localStorage.setItem("winterbell-best",String(v));}catch{}
+  }
+  best=loadBest();
   let rabbit,bells=[],birds=[],stars=[],particles=[],cameraY=0,nextBellY=0,last=0,mouseX=0;
   let hasLanded=false,waitingForJump=true;
   bestEl.textContent=best;
 
   function resize(){
     const r=canvas.getBoundingClientRect();
+    const oldW=W||r.width, oldH=H||r.height;
     dpr=Math.min(devicePixelRatio||1,2);
-    W=r.width; H=r.height;
+    W=Math.max(1,r.width); H=Math.max(1,r.height);
     canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    mouseX=W/2;
+    if(state==="playing"&&rabbit){
+      const sx=W/oldW, sy=H/oldH;
+      rabbit.x=Math.max(18,Math.min(W-18,rabbit.x*sx));
+      rabbit.y=Math.min(H-80,rabbit.y*sy);
+      for(const b of bells)b.x=Math.max(42,Math.min(W-42,b.x*sx));
+      for(const b of birds){b.x*=sx;b.y*=sy;}
+      for(const s of stars){s.x*=sx;s.y*=sy;}
+      mouseX=Math.max(0,Math.min(W,mouseX*sx));
+    }else mouseX=W/2;
     if(state!=="playing") draw();
   }
   addEventListener("resize",resize); resize();
@@ -38,11 +57,19 @@
     scoreEl.textContent=0;
   }
 
-  function addBell(y,i){
+  function addBell(y,i,forcedX=null){
     const gap=Math.min(W*.34,110+i*7);
     const prev=bells.length?bells[bells.length-1].x:W/2;
-    const x=Math.max(42,Math.min(W-42,prev+rand(-gap,gap)));
-    bells.push({x,y,w:Math.max(25,52-i*.65),h:12,hit:false,life:1});
+    const x=forcedX===null?rand(Math.max(42,prev-gap),Math.min(W-42,prev+gap)):forcedX;
+    bells.push({x:Math.max(42,Math.min(W-42,x)),y,w:Math.max(25,52-i*.65),h:12,hit:false});
+  }
+  function addReachableBell(y,i){
+    const prev=bells[bells.length-1];
+    const prevX=prev?prev.x:W/2;
+    const jumpRise=Math.min(780,660+score*.6);
+    const timeToSameHeight=(2*jumpRise)/900;
+    const maxOffset=Math.min(W*.30,Math.max(90,150+timeToSameHeight*150));
+    addBell(y,i,rand(Math.max(42,prevX-maxOffset),Math.min(W-42,prevX+maxOffset)));
   }
 
   function startGame(){
@@ -70,7 +97,7 @@
     finalScoreEl.textContent=score;
     if(score>best){
       best=score;
-      localStorage.setItem("winterbell-best",best);
+      saveBest(best);
       bestEl.textContent=best;
     }
     overPanel.classList.remove("hidden");
@@ -102,14 +129,15 @@
     if(rabbit.x<18){rabbit.x=18;rabbit.vx=0}
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
 
+    const previousFootY=rabbit.y+rabbit.r;
     if(rabbit.vy>0){
       for(const b of bells){
         const by=worldY(b.y);
         if(!b.hit &&
            rabbit.x>b.x-b.w/2-rabbit.r*.55 &&
            rabbit.x<b.x+b.w/2+rabbit.r*.55 &&
-           rabbit.y+rabbit.r>by &&
-           rabbit.y+rabbit.r<by+20){
+           previousFootY<=by+4 &&
+           rabbit.y+rabbit.r>=by){
           rabbit.y=by-rabbit.r;
           rabbit.vy=-Math.min(780,660+score*.6);
           b.hit=true;
@@ -130,7 +158,7 @@
     while(nextBellY-cameraY>-120){
       const i=bells.length;
       nextBellY-=rand(82,112);
-      addBell(nextBellY,i);
+      addReachableBell(nextBellY,i);
       if(Math.random()<.12){
         birds.push({
           x:rand(40,W-40),
