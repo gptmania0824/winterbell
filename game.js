@@ -39,7 +39,8 @@
       for(const b of birds)b.x*=sx;
       for(const s of stars)s.x*=sx;
       mouseX=Math.max(0,Math.min(W,mouseX*sx));
-      cameraY=rabbit.y-H*.45;
+      const targetCam=rabbit.y-H*.45;
+      if(targetCam<cameraY) cameraY=targetCam;
     }else{
       mouseX=W/2;
     }
@@ -48,6 +49,7 @@
   addEventListener("resize",resize);
 
   function rand(a,b){return a+Math.random()*(b-a)}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 
   function reset(){
     score=0; cameraY=0; nextBellY=H-115; bellIndex=0;
@@ -206,10 +208,13 @@
       }
     }
 
-    // Canvas Y increases downward. While climbing, rabbit.y decreases, so
-    // cameraY must also decrease to move the visible world upward.
+    // Camera follows the rabbit only while it climbs above the tracking line.
+    // It never moves downward during a fall, so falling out of the viewport
+    // can correctly trigger game over.
     const targetCam=rabbit.y-H*.45;
-    cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
+    if(targetCam<cameraY){
+      cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
+    }
 
     while(nextBellY-cameraY>-120){
       nextBellY-=rand(82,112);
