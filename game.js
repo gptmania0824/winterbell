@@ -154,8 +154,9 @@
       }
     }
 
-    const rabbitScreenY=rabbit.y-cameraY;
-    const targetCam=Math.max(0,(H*.45)-rabbitScreenY);
+    // Camera position is derived directly from the rabbit's world-space position.
+    // This keeps the camera from drifting when the rabbit is stationary.
+    const targetCam=Math.max(0,rabbit.y-H*.45);
     cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
 
     while(nextBellY-cameraY>-120){
