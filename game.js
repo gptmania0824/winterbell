@@ -41,7 +41,7 @@
     }else mouseX=W/2;
     if(state!=="playing") draw();
   }
-  addEventListener("resize",resize); resize();
+  addEventListener("resize",resize);
 
   function rand(a,b){return a+Math.random()*(b-a)}
 
@@ -263,5 +263,6 @@
   });
 
   reset();
+  resize();
   draw();
 })();
