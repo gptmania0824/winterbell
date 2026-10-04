@@ -317,7 +317,23 @@
   }
 
   canvas.addEventListener("pointermove",pointer);
-  canvas.addEventListener("pointerdown",pointer);
+  canvas.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse"&&e.button!==0)return;
+    if(canvas.setPointerCapture && e.pointerId!==undefined){
+      try{canvas.setPointerCapture(e.pointerId)}catch{}
+    }
+    pointer(e);
+  });
+  canvas.addEventListener("pointerup",e=>{
+    if(canvas.releasePointerCapture && e.pointerId!==undefined){
+      try{canvas.releasePointerCapture(e.pointerId)}catch{}
+    }
+  });
+  canvas.addEventListener("pointercancel",e=>{
+    if(canvas.releasePointerCapture && e.pointerId!==undefined){
+      try{canvas.releasePointerCapture(e.pointerId)}catch{}
+    }
+  });
 
   addEventListener("keydown",e=>{
     if(e.key===" "||e.key==="Enter"){
