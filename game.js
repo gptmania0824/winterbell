@@ -20,56 +20,114 @@
   }
   best=loadBest();
   let rabbit,bells=[],birds=[],stars=[],particles=[],cameraY=0,nextBellY=0,last=0,mouseX=0;
-  let hasLanded=false,waitingForJump=true;
+  let hasLanded=false,waitingForJump=true,bellIndex=0;
   bestEl.textContent=best;
 
   function resize(){
     const r=canvas.getBoundingClientRect();
-    const oldW=W||r.width, oldH=H||r.height;
+    const oldW=W||r.width||1;
     dpr=Math.min(devicePixelRatio||1,2);
     W=Math.max(1,r.width); H=Math.max(1,r.height);
     canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     if(state==="playing"&&rabbit){
-      const sx=W/oldW, sy=H/oldH;
-      rabbit.x=Math.max(18,Math.min(W-18,rabbit.x*sx));
-      // Keep rabbit.y in world-space; only horizontal position is viewport-relative.
-      for(const b of bells)b.x=Math.max(42,Math.min(W-42,b.x*sx));
-      for(const b of birds){b.x*=sx;b.y*=sy;}
-      for(const s of stars){s.x*=sx;s.y*=sy;}
+      const sx=W/oldW;
+      const maxRabbitX=Math.max(18,W-18);
+      const maxBellX=Math.max(42,W-42);
+      rabbit.x=Math.max(18,Math.min(maxRabbitX,rabbit.x*sx));
+      for(const b of bells)b.x=Math.max(42,Math.min(maxBellX,b.x*sx));
+      for(const b of birds)b.x*=sx;
+      for(const s of stars)s.x*=sx;
       mouseX=Math.max(0,Math.min(W,mouseX*sx));
-    }else mouseX=W/2;
-    if(state!=="playing") draw();
+      cameraY=rabbit.y-H*.45;
+    }else{
+      mouseX=W/2;
+    }
+    if(state!=="playing"&&rabbit) draw();
   }
   addEventListener("resize",resize);
 
   function rand(a,b){return a+Math.random()*(b-a)}
 
   function reset(){
-    score=0; cameraY=0; nextBellY=H-115;
+    score=0; cameraY=0; nextBellY=H-115; bellIndex=0;
     rabbit={x:W/2,y:H-155,vx:0,vy:0,r:18};
     bells=[]; birds=[]; particles=[];
     stars=Array.from({length:120},()=>({x:rand(0,W),y:rand(-300,H+300),r:rand(.5,1.8),a:rand(.25,.9)}));
-    for(let i=0;i<16;i++) addBell(H-95-i*95,i);
+    for(let i=0;i<16;i++){
+      const fromY=i===0 ? rabbit.y+rabbit.r : bells[bells.length-1].y;
+      const jumpVelocity=i===0 ? 720 : 660;
+      addReachableBell(H-95-i*95,jumpVelocity,fromY);
+    }
+    nextBellY=bells[bells.length-1].y;
     mouseX=W/2;
     hasLanded=false;
     waitingForJump=true;
     scoreEl.textContent=0;
   }
 
-  function addBell(y,i,forcedX=null){
+  function addBell(y,forcedX=null){
+    const i=bellIndex++;
+    const width=Math.max(25,52-i*.65);
     const gap=Math.min(W*.34,110+i*7);
     const prev=bells.length?bells[bells.length-1].x:W/2;
-    const x=forcedX===null?rand(Math.max(42,prev-gap),Math.min(W-42,prev+gap)):forcedX;
-    bells.push({x:Math.max(42,Math.min(W-42,x)),y,w:Math.max(25,52-i*.65),h:12,hit:false});
+    const minX=Math.min(42,Math.max(1,W-42));
+    const maxX=Math.max(minX,Math.max(42,W-42));
+    const x=forcedX===null
+      ? rand(clamp(prev-gap,minX,maxX),clamp(prev+gap,minX,maxX))
+      : clamp(forcedX,minX,maxX);
+    bells.push({x,y,w:width,h:12,hit:false});
   }
-  function addReachableBell(y,i){
+
+  function landingTime(gap,jumpVelocity){
+    const g=900;
+    const discriminant=jumpVelocity*jumpVelocity-2*g*gap;
+    if(discriminant<0)return null;
+    return (jumpVelocity+Math.sqrt(discriminant))/g;
+  }
+
+  function canReachX(startX,targetX,time,halfWidth){
+    let x=startX,vx=0;
+    const step=1/120;
+    const steps=Math.ceil(time/step);
+    const dt=time/steps;
+    for(let n=0;n<steps;n++){
+      const dx=targetX-x;
+      vx+=dx*8*dt;
+      vx*=Math.pow(.035,dt);
+      x+=vx*dt;
+      if(x<18){x=18;vx=0}
+      if(x>W-18){x=W-18;vx=0}
+    }
+    return Math.abs(x-targetX)<=halfWidth;
+  }
+
+  function findReachableX(startX,targetY,jumpVelocity,fromY,bellWidth){
+    const gap=fromY-targetY;
+    const time=landingTime(gap,jumpVelocity);
+    const minX=Math.min(42,Math.max(1,W-42));
+    const maxX=Math.max(minX,Math.max(42,W-42));
+    if(time===null)return startX;
+
+    const hitWidth=bellWidth/2+18*.55+6;
+    const candidates=[];
+    const count=25;
+    for(let i=0;i<count;i++){
+      candidates.push(minX+(maxX-minX)*(i/(count-1)));
+    }
+    candidates.sort((a,b)=>Math.abs(a-startX)-Math.abs(b-startX));
+    for(const x of candidates){
+      if(canReachX(startX,x,time,hitWidth))return x;
+    }
+    return clamp(startX,minX,maxX);
+  }
+
+  function addReachableBell(y,jumpVelocity,fromY){
     const prev=bells[bells.length-1];
     const prevX=prev?prev.x:W/2;
-    const jumpRise=Math.min(780,660+score*.6);
-    const timeToSameHeight=(2*jumpRise)/900;
-    const maxOffset=Math.min(W*.30,Math.max(90,150+timeToSameHeight*150));
-    addBell(y,i,rand(Math.max(42,prevX-maxOffset),Math.min(W-42,prevX+maxOffset)));
+    const width=Math.max(25,52-bellIndex*.65);
+    const x=findReachableX(prevX,y,jumpVelocity,fromY,width);
+    addBell(y,x);
   }
 
   function startGame(){
@@ -104,14 +162,8 @@
   }
 
   function resetBeforeFirstLanding(){
-    // Missing the first bell is a failed attempt, not a game over.
-    rabbit.x=W/2;
-    rabbit.y=H-155;
-    rabbit.vx=0;
-    rabbit.vy=0;
-    cameraY=0;
-    waitingForJump=true;
-    mouseX=W/2;
+    // Missing the first bell is a failed attempt, so rebuild the whole attempt.
+    reset();
   }
 
   function worldY(y){return y-cameraY}
@@ -154,15 +206,16 @@
       }
     }
 
-    // Camera position is derived directly from the rabbit's world-space position.
-    // This keeps the camera from drifting when the rabbit is stationary.
-    const targetCam=Math.max(0,rabbit.y-H*.45);
+    // Canvas Y increases downward. While climbing, rabbit.y decreases, so
+    // cameraY must also decrease to move the visible world upward.
+    const targetCam=rabbit.y-H*.45;
     cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
 
     while(nextBellY-cameraY>-120){
-      const i=bells.length;
       nextBellY-=rand(82,112);
-      addReachableBell(nextBellY,i);
+      const jumpVelocity=Math.min(780,660+score*.6);
+      const fromY=bells.length?bells[bells.length-1].y:nextBellY+95;
+      addReachableBell(nextBellY,jumpVelocity,fromY);
       if(Math.random()<.12){
         birds.push({
           x:rand(40,W-40),
@@ -173,7 +226,7 @@
       }
     }
 
-    bells=bells.filter(b=>worldY(b.y)<H+80 && b.y-cameraY>-160);
+    bells=bells.filter(b=>worldY(b.y)<H+80 && worldY(b.y)>-160);
     birds.forEach(b=>{b.x+=b.vx*dt;if(b.x<-30||b.x>W+30)b.vx*=-1});
     particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=80*dt;p.life-=dt*2});
     particles=particles.filter(p=>p.life>0);
@@ -189,17 +242,17 @@
     g.addColorStop(0,"#081a35"); g.addColorStop(1,"#24476b");
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 
-    ctx.save();
-    ctx.translate(0,-(cameraY%H));
+    // Stars are screen-space background elements. Explicit wrapping avoids
+    // modulo/translate artifacts when cameraY becomes negative.
     for(const s of stars){
+      const y=((s.y-cameraY)%H+H)%H;
       ctx.globalAlpha=s.a;
       ctx.fillStyle="#fff";
       ctx.beginPath();
-      ctx.arc(s.x,s.y+Math.floor(cameraY/H)*H,s.r,0,Math.PI*2);
+      ctx.arc(s.x,y,s.r,0,Math.PI*2);
       ctx.fill();
     }
     ctx.globalAlpha=1;
-    ctx.restore();
 
     for(const b of bells){
       const y=worldY(b.y);
@@ -251,8 +304,11 @@
 
   function pointer(e){
     const r=canvas.getBoundingClientRect();
-    mouseX=e.clientX-r.left;
-    if(e.type==="pointerdown") restartFromInput();
+    mouseX=clamp(e.clientX-r.left,0,W);
+    if(e.type==="pointerdown"){
+      if(e.pointerType==="mouse"&&e.button!==0)return;
+      restartFromInput();
+    }
   }
 
   canvas.addEventListener("pointermove",pointer);
@@ -266,7 +322,8 @@
     }
   });
 
-  reset();
+  // Establish the canvas dimensions before creating world objects.
   resize();
+  reset();
   draw();
 })();
