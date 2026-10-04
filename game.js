@@ -119,10 +119,12 @@
   function update(dt){
     if(waitingForJump) return;
 
-    // Keep the foot position from the previous physics step for swept collision detection.
-    const previousFootY=rabbit.y+rabbit.r;
+    // rabbit.y is screen-space while bells use world-space coordinates.
+    // Convert both ends of the swept foot segment to the same world-space.
+    const previousFootY=rabbit.y+rabbit.r+cameraY;
     const target=mouseX;
-    rabbit.vx += (target-rabbit.x)*8*dt;
+    const dx=target-rabbit.x;
+    rabbit.vx += dx*8*dt;
     rabbit.vx *= Math.pow(.035,dt);
     rabbit.x += rabbit.vx*dt;
     rabbit.vy += 900*dt;
@@ -130,14 +132,15 @@
 
     if(rabbit.x<18){rabbit.x=18;rabbit.vx=0}
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
+    const currentFootY=rabbit.y+rabbit.r+cameraY;
     if(rabbit.vy>0){
       for(const b of bells){
-        const by=worldY(b.y);
+        const by=b.y;
         if(!b.hit &&
            rabbit.x>b.x-b.w/2-rabbit.r*.55 &&
            rabbit.x<b.x+b.w/2+rabbit.r*.55 &&
            previousFootY<=by+4 &&
-           rabbit.y+rabbit.r>=by){
+           currentFootY>=by){
           rabbit.y=by-rabbit.r;
           rabbit.vy=-Math.min(780,660+score*.6);
           b.hit=true;
