@@ -33,7 +33,7 @@
     if(state==="playing"&&rabbit){
       const sx=W/oldW, sy=H/oldH;
       rabbit.x=Math.max(18,Math.min(W-18,rabbit.x*sx));
-      rabbit.y=Math.min(H-80,rabbit.y*sy);
+      // Keep rabbit.y in world-space; only horizontal position is viewport-relative.
       for(const b of bells)b.x=Math.max(42,Math.min(W-42,b.x*sx));
       for(const b of birds){b.x*=sx;b.y*=sy;}
       for(const s of stars){s.x*=sx;s.y*=sy;}
@@ -119,9 +119,8 @@
   function update(dt){
     if(waitingForJump) return;
 
-    // rabbit.y is screen-space while bells use world-space coordinates.
-    // Convert both ends of the swept foot segment to the same world-space.
-    const previousFootY=rabbit.y+rabbit.r+cameraY;
+    // rabbit.y and bell.y are both world-space coordinates.
+    const previousFootY=rabbit.y+rabbit.r;
     const target=mouseX;
     const dx=target-rabbit.x;
     rabbit.vx += dx*8*dt;
@@ -132,7 +131,7 @@
 
     if(rabbit.x<18){rabbit.x=18;rabbit.vx=0}
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
-    const currentFootY=rabbit.y+rabbit.r+cameraY;
+    const currentFootY=rabbit.y+rabbit.r;
     if(rabbit.vy>0){
       for(const b of bells){
         const by=b.y;
@@ -155,7 +154,8 @@
       }
     }
 
-    const targetCam=Math.max(0,(H*.45)-rabbit.y);
+    const rabbitScreenY=rabbit.y-cameraY;
+    const targetCam=Math.max(0,(H*.45)-rabbitScreenY);
     cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
 
     while(nextBellY-cameraY>-120){
@@ -177,7 +177,7 @@
     particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=80*dt;p.life-=dt*2});
     particles=particles.filter(p=>p.life>0);
 
-    if(rabbit.y>H+80){
+    if(rabbit.y-cameraY>H+80){
       if(!hasLanded) resetBeforeFirstLanding();
       else end();
     }
@@ -226,7 +226,7 @@
       ctx.beginPath();ctx.arc(p.x,worldY(p.y),2.5,0,Math.PI*2);ctx.fill();
     }
     ctx.globalAlpha=1;
-    drawRabbit(rabbit.x,rabbit.y);
+    drawRabbit(rabbit.x,rabbit.y-cameraY);
   }
 
   function drawRabbit(x,y){
