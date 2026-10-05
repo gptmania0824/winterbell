@@ -164,7 +164,6 @@
   }
 
   function resetBeforeFirstLanding(){
-    // Missing the first bell is a failed attempt, so rebuild the whole attempt.
     reset();
   }
 
@@ -173,7 +172,6 @@
   function update(dt){
     if(waitingForJump) return;
 
-    // rabbit.y and bell.y are both world-space coordinates.
     const previousFootY=rabbit.y+rabbit.r;
     const target=mouseX;
     const dx=target-rabbit.x;
@@ -187,8 +185,6 @@
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
     const currentFootY=rabbit.y+rabbit.r;
 
-    // Bells: each successful bell is worth 10 more points than the previous one
-    // (10, 20, 30, ...), matching the original Winterbells scoring rule.
     if(rabbit.vy>0){
       for(const b of bells){
         const by=b.y;
@@ -211,8 +207,6 @@
         }
       }
 
-      // Birds are bonus targets. Pouncing on one doubles the current score,
-      // then gives the rabbit an upward bounce so the run can continue.
       for(const b of birds){
         if(b.hit)continue;
         if(rabbit.x>b.x-rabbit.r-b.r &&
@@ -232,9 +226,6 @@
       }
     }
 
-    // Camera follows the rabbit only while it climbs above the tracking line.
-    // It never moves downward during a fall, so falling out of the viewport
-    // can correctly trigger game over.
     const targetCam=rabbit.y-H*.45;
     if(targetCam<cameraY){
       cameraY += (targetCam-cameraY)*Math.min(1,5*dt);
@@ -273,8 +264,6 @@
     g.addColorStop(0,"#081a35"); g.addColorStop(1,"#24476b");
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 
-    // Stars are screen-space background elements. Explicit wrapping avoids
-    // modulo/translate artifacts when cameraY becomes negative.
     for(const s of stars){
       const y=((s.y-cameraY)%H+H)%H;
       ctx.globalAlpha=s.a;
@@ -318,9 +307,15 @@
     ctx.save();ctx.translate(x,y);
     ctx.fillStyle="#fff";
     ctx.beginPath();ctx.ellipse(0,7,17,20,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.ellipse(-9,-14,6,17,-.18,0,Math.PI*2).ellipse(9,-14,6,17,.18,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-9,-14,6,17,-.18,0,Math.PI*2);
+    ctx.ellipse(9,-14,6,17,.18,0,Math.PI*2);
+    ctx.fill();
     ctx.fillStyle="#f1aebd";
-    ctx.beginPath();ctx.ellipse(-9,-14,2.2,11,-.18,0,Math.PI*2).ellipse(9,-14,2.2,11,.18,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-9,-14,2.2,11,-.18,0,Math.PI*2);
+    ctx.ellipse(9,-14,2.2,11,.18,0,Math.PI*2);
+    ctx.fill();
     ctx.fillStyle="#24384d";
     ctx.beginPath();ctx.arc(-6,0,2.1,0,Math.PI*2);ctx.arc(6,0,2.1,0,Math.PI*2);ctx.fill();
     ctx.fillStyle="#e8a7b8";ctx.beginPath();ctx.arc(0,5,2.5,0,Math.PI*2);ctx.fill();
@@ -369,7 +364,6 @@
     }
   });
 
-  // Establish the canvas dimensions before creating world objects.
   resize();
   reset();
   draw();
