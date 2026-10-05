@@ -20,7 +20,7 @@
   }
   best=loadBest();
   let rabbit,bells=[],birds=[],stars=[],particles=[],cameraY=0,nextBellY=0,last=0,mouseX=0;
-  let hasLanded=false,waitingForJump=true,bellIndex=0;
+  let hasLanded=false,waitingForJump=true,bellIndex=0,bellHits=0;
   bestEl.textContent=best;
 
   function resize(){
@@ -36,7 +36,7 @@
       const maxBellX=Math.max(42,W-42);
       rabbit.x=Math.max(18,Math.min(maxRabbitX,rabbit.x*sx));
       for(const b of bells)b.x=Math.max(42,Math.min(maxBellX,b.x*sx));
-      for(const b of birds)b.x*=sx;
+      for(const b of birds)b.x=Math.max(20,Math.min(W-20,b.x*sx));
       for(const s of stars)s.x*=sx;
       mouseX=Math.max(0,Math.min(W,mouseX*sx));
       const targetCam=rabbit.y-H*.45;
@@ -52,7 +52,7 @@
   function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 
   function reset(){
-    score=0; cameraY=0; nextBellY=H-115; bellIndex=0;
+    score=0; bellHits=0; cameraY=0; nextBellY=H-115; bellIndex=0;
     rabbit={x:W/2,y:H-155,vx:0,vy:0,r:18};
     bells=[]; birds=[]; particles=[];
     stars=Array.from({length:120},()=>({x:rand(0,W),y:rand(-300,H+300),r:rand(.5,1.8),a:rand(.25,.9)}));
@@ -186,6 +186,9 @@
     if(rabbit.x<18){rabbit.x=18;rabbit.vx=0}
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
     const currentFootY=rabbit.y+rabbit.r;
+
+    // Bells: each successful bell is worth 10 more points than the previous one
+    // (10, 20, 30, ...), matching the original Winterbells scoring rule.
     if(rabbit.vy>0){
       for(const b of bells){
         const by=b.y;
@@ -198,10 +201,31 @@
           rabbit.vy=-Math.min(780,660+score*.6);
           b.hit=true;
           hasLanded=true;
-          score+=10+Math.floor(score/100)*10;
+          bellHits+=1;
+          score+=bellHits*10;
           scoreEl.textContent=score;
           for(let i=0;i<8;i++){
             particles.push({x:b.x,y:b.y,vy:rand(-50,20),vx:rand(-70,70),life:1});
+          }
+          break;
+        }
+      }
+
+      // Birds are bonus targets. Pouncing on one doubles the current score,
+      // then gives the rabbit an upward bounce so the run can continue.
+      for(const b of birds){
+        if(b.hit)continue;
+        if(rabbit.x>b.x-rabbit.r-b.r &&
+           rabbit.x<b.x+rabbit.r+b.r &&
+           previousFootY<=b.y+b.r &&
+           currentFootY>=b.y-b.r){
+          b.hit=true;
+          score*=2;
+          scoreEl.textContent=score;
+          rabbit.y=b.y-rabbit.r-b.r*.35;
+          rabbit.vy=-Math.min(900,720+score*.15);
+          for(let i=0;i<14;i++){
+            particles.push({x:b.x,y:b.y,vy:rand(-90,30),vx:rand(-100,100),life:1.2});
           }
           break;
         }
@@ -226,13 +250,15 @@
           x:rand(40,W-40),
           y:nextBellY-rand(25,55),
           vx:rand(45,90)*(Math.random()<.5?-1:1),
-          r:10
+          r:10,
+          hit:false
         });
       }
     }
 
     bells=bells.filter(b=>worldY(b.y)<H+80 && worldY(b.y)>-160);
     birds.forEach(b=>{b.x+=b.vx*dt;if(b.x<-30||b.x>W+30)b.vx*=-1});
+    birds=birds.filter(b=>!b.hit && worldY(b.y)<H+80 && worldY(b.y)>-160);
     particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=80*dt;p.life-=dt*2});
     particles=particles.filter(p=>p.life>0);
 
@@ -292,9 +318,9 @@
     ctx.save();ctx.translate(x,y);
     ctx.fillStyle="#fff";
     ctx.beginPath();ctx.ellipse(0,7,17,20,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.ellipse(-9,-14,6,17,-.18,0,Math.PI*2);ctx.ellipse(9,-14,6,17,.18,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(-9,-14,6,17,-.18,0,Math.PI*2).ellipse(9,-14,6,17,.18,0,Math.PI*2);ctx.fill();
     ctx.fillStyle="#f1aebd";
-    ctx.beginPath();ctx.ellipse(-9,-14,2.2,11,-.18,0,Math.PI*2);ctx.ellipse(9,-14,2.2,11,.18,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(-9,-14,2.2,11,-.18,0,Math.PI*2).ellipse(9,-14,2.2,11,.18,0,Math.PI*2);ctx.fill();
     ctx.fillStyle="#24384d";
     ctx.beginPath();ctx.arc(-6,0,2.1,0,Math.PI*2);ctx.arc(6,0,2.1,0,Math.PI*2);ctx.fill();
     ctx.fillStyle="#e8a7b8";ctx.beginPath();ctx.arc(0,5,2.5,0,Math.PI*2);ctx.fill();
