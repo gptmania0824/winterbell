@@ -1,7 +1,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071426}
 body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#fff}
-#game{position:relative;width:100%;height:100%;min-height:420px}
+#game{position:relative;width:100%;height:100%}
 canvas{display:block;width:100%;height:100%;cursor:none;touch-action:none}
 #hud{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;font-size:18px;text-shadow:0 2px 5px #001;pointer-events:none}
 .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(460px,calc(100% - 36px));padding:28px;text-align:center;border:1px solid rgba(255,255,255,.25);border-radius:18px;background:rgba(8,24,45,.78);backdrop-filter:blur(8px);box-shadow:0 15px 50px rgba(0,0,0,.35);pointer-events:none}
