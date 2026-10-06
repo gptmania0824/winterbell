@@ -8,7 +8,8 @@
   let waiting=true,hasLanded=false,hits=0,index=0,next=null;
   const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),worldY=y=>y-cameraY;
   try{best=Math.max(0,Number.parseInt(localStorage.getItem("winterbell-best")||"0",10)||0)}catch(_){} bestEl.textContent=best;
-  function saveBest(v){try{localStorage.setItem("winterbell-best",String(v))}catch(_){}}
+  function saveBest(v){try{localStorage.setItem("winterbell-best",String(v))}catch(_){}
+  }
   function resize(){
     const r=canvas.getBoundingClientRect(),old=W||r.width||1;dpr=Math.min(devicePixelRatio||1,2);W=Math.max(1,r.width);H=Math.max(1,r.height);
     canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -19,8 +20,6 @@
   function horizontalStep(x,v,target,dt){v+=(target-x)*8*dt;v*=Math.pow(.035,dt);x+=v*dt;if(x<R){x=R;v=0}if(x>W-R){x=W-R;v=0}return[x,v]}
   const bellWidth=i=>Math.max(25,52-i*.65);
 
-  // Return the descending intersection time. The smaller quadratic root is the
-  // ascent crossing and must NOT be used to certify a landing.
   function landingTime(fromY,bellY,jump){
     const a=.5*G,b=-(jump+FALL),c=fromY-bellY,d=b*b-4*a*c;if(d<0)return null;
     const q=Math.sqrt(d),t1=(-b-q)/(2*a),t2=(-b+q)/(2*a);return t2>0?t2:(t1>0?t1:null);
@@ -46,7 +45,6 @@
   }
   function spawnNext(fromX,fromY,proposed,jump){
     const w=bellWidth(index),chosen=chooseBell(fromX,fromY,proposed,jump,w);
-    // Same-x, minimum-gap fallback is analytically reachable with these physics.
     const r=chosen||{x:clamp(fromX,42,Math.max(42,W-42)),y:fromY-MIN_GAP};
     next={x:r.x,y:r.y,w,h:12,vy:FALL,hit:false,index:index++};
   }
@@ -64,7 +62,11 @@
   function land(b){
     rabbit.y=b.y-R;rabbit.vy=-Math.min(780,BASE+score*.6);b.hit=true;hasLanded=true;hits++;score+=hits*10;scoreEl.textContent=score;
     for(let i=0;i<8;i++)particles.push({x:b.x,y:b.y,vx:rand(-70,70),vy:rand(-50,20),life:1});
-    const jump=Math.min(780,BASE+score*.6),gap=rand(MIN_GAP,MAX_GAP);spawnNext(rabbit.x,rabbit.y+R,b.y-gap,jump);
+    const jump=Math.min(780,BASE+score*.6),gap=rand(MIN_GAP,MAX_GAP);
+    spawnNext(rabbit.x,rabbit.y+R,b.y-gap,jump);
+    // The newly generated bell is immediately promoted to the collision set.
+    // Keeping it in `next` would render it visible and falling but impossible to land on.
+    promote();
     if(Math.random()<.12)birds.push({x:clamp(b.x+rand(-100,100),40,Math.max(40,W-40)),y:b.y-rand(25,55),vx:rand(45,90)*(Math.random()<.5?-1:1),r:10,hit:false});
   }
   function updateBells(dt){for(const b of bells)b.y+=b.vy*dt;if(next)next.y+=next.vy*dt}
