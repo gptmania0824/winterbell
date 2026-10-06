@@ -21,6 +21,7 @@
   best=loadBest();
   let rabbit,bells=[],birds=[],stars=[],particles=[],cameraY=0,nextBellY=0,last=0,mouseX=0;
   let hasLanded=false,waitingForJump=true,bellIndex=0,bellHits=0;
+  let lastGeneratedBellX=0,lastGeneratedBellY=0;
   bestEl.textContent=best;
 
   function resize(){
@@ -39,6 +40,7 @@
       for(const b of birds)b.x=Math.max(20,Math.min(W-20,b.x*sx));
       for(const s of stars)s.x*=sx;
       mouseX=Math.max(0,Math.min(W,mouseX*sx));
+      lastGeneratedBellX=Math.max(42,Math.min(maxBellX,lastGeneratedBellX*sx));
       const targetCam=rabbit.y-H*.45;
       if(targetCam<cameraY) cameraY=targetCam;
     }else{
@@ -55,13 +57,18 @@
     score=0; bellHits=0; cameraY=0; nextBellY=H-115; bellIndex=0;
     rabbit={x:W/2,y:H-155,vx:0,vy:0,r:18};
     bells=[]; birds=[]; particles=[];
+    lastGeneratedBellX=rabbit.x;
+    lastGeneratedBellY=rabbit.y+rabbit.r;
     stars=Array.from({length:120},()=>({x:rand(0,W),y:rand(-300,H+300),r:rand(.5,1.8),a:rand(.25,.9)}));
     for(let i=0;i<16;i++){
-      const fromY=i===0 ? rabbit.y+rabbit.r : bells[bells.length-1].y;
+      const y=H-95-i*95;
       const jumpVelocity=i===0 ? 720 : 660;
-      addReachableBell(H-95-i*95,jumpVelocity,fromY);
+      addReachableBell(y,jumpVelocity,lastGeneratedBellX,lastGeneratedBellY);
+      const added=bells[bells.length-1];
+      lastGeneratedBellX=added.x;
+      lastGeneratedBellY=added.y;
     }
-    nextBellY=bells[bells.length-1].y;
+    nextBellY=lastGeneratedBellY;
     mouseX=W/2;
     hasLanded=false;
     waitingForJump=true;
@@ -72,11 +79,11 @@
     const i=bellIndex++;
     const width=Math.max(25,52-i*.65);
     const gap=Math.min(W*.34,110+i*7);
-    const prev=bells.length?bells[bells.length-1].x:W/2;
+    const prevX=lastGeneratedBellX||W/2;
     const minX=Math.min(42,Math.max(1,W-42));
     const maxX=Math.max(minX,Math.max(42,W-42));
     const x=forcedX===null
-      ? rand(clamp(prev-gap,minX,maxX),clamp(prev+gap,minX,maxX))
+      ? rand(clamp(prevX-gap,minX,maxX),clamp(prevX+gap,minX,maxX))
       : clamp(forcedX,minX,maxX);
     bells.push({x,y,w:width,h:12,hit:false});
   }
@@ -91,7 +98,7 @@
   function canReachX(startX,targetX,time,halfWidth){
     let x=startX,vx=0;
     const step=1/120;
-    const steps=Math.ceil(time/step);
+    const steps=Math.max(1,Math.ceil(time/step));
     const dt=time/steps;
     for(let n=0;n<steps;n++){
       const dx=targetX-x;
@@ -109,11 +116,11 @@
     const time=landingTime(gap,jumpVelocity);
     const minX=Math.min(42,Math.max(1,W-42));
     const maxX=Math.max(minX,Math.max(42,W-42));
-    if(time===null)return startX;
+    if(time===null)return clamp(startX,minX,maxX);
 
     const hitWidth=bellWidth/2+18*.55+6;
     const candidates=[];
-    const count=25;
+    const count=81;
     for(let i=0;i<count;i++){
       candidates.push(minX+(maxX-minX)*(i/(count-1)));
     }
@@ -124,11 +131,9 @@
     return clamp(startX,minX,maxX);
   }
 
-  function addReachableBell(y,jumpVelocity,fromY){
-    const prev=bells[bells.length-1];
-    const prevX=prev?prev.x:W/2;
+  function addReachableBell(y,jumpVelocity,fromX,fromY){
     const width=Math.max(25,52-bellIndex*.65);
-    const x=findReachableX(prevX,y,jumpVelocity,fromY,width);
+    const x=findReachableX(fromX,y,jumpVelocity,fromY,width);
     addBell(y,x);
   }
 
@@ -148,7 +153,11 @@
   }
 
   function restartFromInput(){
-    if(state==="menu" || state==="over") startGame();
+    const inputX=mouseX;
+    if(state==="menu" || state==="over"){
+      startGame();
+      mouseX=clamp(inputX,0,W);
+    }
     launchFirstJump();
   }
 
@@ -185,6 +194,7 @@
     if(rabbit.x>W-18){rabbit.x=W-18;rabbit.vx=0}
     const currentFootY=rabbit.y+rabbit.r;
 
+    let landedThisFrame=false;
     if(rabbit.vy>0){
       for(const b of bells){
         const by=b.y;
@@ -200,6 +210,7 @@
           bellHits+=1;
           score+=bellHits*10;
           scoreEl.textContent=score;
+          landedThisFrame=true;
           for(let i=0;i<8;i++){
             particles.push({x:b.x,y:b.y,vy:rand(-50,20),vx:rand(-70,70),life:1});
           }
@@ -207,21 +218,24 @@
         }
       }
 
-      for(const b of birds){
-        if(b.hit)continue;
-        if(rabbit.x>b.x-rabbit.r-b.r &&
-           rabbit.x<b.x+rabbit.r+b.r &&
-           previousFootY<=b.y+b.r &&
-           currentFootY>=b.y-b.r){
-          b.hit=true;
-          score*=2;
-          scoreEl.textContent=score;
-          rabbit.y=b.y-rabbit.r-b.r*.35;
-          rabbit.vy=-Math.min(900,720+score*.15);
-          for(let i=0;i<14;i++){
-            particles.push({x:b.x,y:b.y,vy:rand(-90,30),vx:rand(-100,100),life:1.2});
+      if(!landedThisFrame){
+        for(const b of birds){
+          if(b.hit)continue;
+          const birdTop=b.y-b.r*.55;
+          if(rabbit.x>b.x-rabbit.r-b.r*.9 &&
+             rabbit.x<b.x+rabbit.r+b.r*.9 &&
+             previousFootY<=birdTop+4 &&
+             currentFootY>=birdTop){
+            b.hit=true;
+            score*=2;
+            scoreEl.textContent=score;
+            rabbit.y=birdTop-rabbit.r;
+            rabbit.vy=-Math.min(900,720+score*.15);
+            for(let i=0;i<14;i++){
+              particles.push({x:b.x,y:b.y,vy:rand(-90,30),vx:rand(-100,100),life:1.2});
+            }
+            break;
           }
-          break;
         }
       }
     }
@@ -234,8 +248,12 @@
     while(nextBellY-cameraY>-120){
       nextBellY-=rand(82,112);
       const jumpVelocity=Math.min(780,660+score*.6);
-      const fromY=bells.length?bells[bells.length-1].y:nextBellY+95;
-      addReachableBell(nextBellY,jumpVelocity,fromY);
+      const fromX=lastGeneratedBellX;
+      const fromY=lastGeneratedBellY;
+      addReachableBell(nextBellY,jumpVelocity,fromX,fromY);
+      const added=bells[bells.length-1];
+      lastGeneratedBellX=added.x;
+      lastGeneratedBellY=added.y;
       if(Math.random()<.12){
         birds.push({
           x:rand(40,W-40),
@@ -247,15 +265,19 @@
       }
     }
 
-    bells=bells.filter(b=>worldY(b.y)<H+80 && worldY(b.y)>-160);
     birds.forEach(b=>{b.x+=b.vx*dt;if(b.x<-30||b.x>W+30)b.vx*=-1});
+    bells=bells.filter(b=>worldY(b.y)<H+80 && worldY(b.y)>-160);
     birds=birds.filter(b=>!b.hit && worldY(b.y)<H+80 && worldY(b.y)>-160);
     particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=80*dt;p.life-=dt*2});
     particles=particles.filter(p=>p.life>0);
 
     if(rabbit.y-cameraY>H+80){
-      if(!hasLanded) resetBeforeFirstLanding();
-      else end();
+      if(!hasLanded){
+        resetBeforeFirstLanding();
+        return;
+      }
+      end();
+      return;
     }
   }
 
